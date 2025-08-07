@@ -75,6 +75,7 @@ RUN pip install \
     jupyter-server-proxy \
     jupyter-vscode-proxy \
     jupyter-server-ydoc \
+    jupyterhub \
     && pip list
 
 RUN jupyter --paths
@@ -93,6 +94,10 @@ RUN code-server --list-extensions
 RUN jupyter kernelspec list
 
 # CMD ["/usr/bin/bash"]
-ENTRYPOINT ["jupyter", "lab"]
-CMD ["--ip=0.0.0.0", "--no-browser"]
 
+# local use
+# ENTRYPOINT ["jupyter", "lab"]
+# CMD ["--ip=0.0.0.0", "--no-browser"]
+
+# jupyterhub use
+ENTRYPOINT ["jupyterhub-singleuser", "--ip=0.0.0.0", "--no-browser"]
