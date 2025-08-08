@@ -1,24 +1,19 @@
 FROM archlinux/archlinux:base-devel AS root
-ARG NB_USER="jovyan"
-ARG NB_UID="1000"
-ARG NB_GID="100"
+
 
 USER root
 WORKDIR "/"
 
-ENV SHELL=/bin/bash \
-    NB_USER="${NB_USER}" \
-    NB_UID=${NB_UID} \
-    NB_GID=${NB_GID} \
-    NB_HOME="/home/${NB_USER}"
-    
+COPY usr/local/bin/* usr/local/bin
+RUN mkdir /usr/local/bin/start-notebook.d
+RUN mkdir /usr/local/bin/before-notebook.d
+
 RUN pacman -Sy \
     git \
     wget \
     ttf-liberation \
     pandoc \
     nodejs \
-    python-pip \
     clang \
     lldb \
     gcc \
@@ -26,61 +21,54 @@ RUN pacman -Sy \
     vim \
     htop \
     cmake \
+    python-pip \   
     procps-ng \
     --noconfirm 
 
-RUN groupmod -g "${NB_GID}" users
-RUN useradd --no-log-init --create-home -d "${NB_HOME}" --shell /bin/bash --uid "${NB_UID}" --no-user-group  "${NB_USER}" 
-RUN echo 'umask 002' >> "${NB_HOME}/.bashrc" && chown -R "${NB_UID}":"${NB_GID}" "${NB_HOME}"
-
-USER ${NB_UID}
-RUN mkdir "${NB_HOME}/aur"
-WORKDIR "${NB_HOME}/aur"
-RUN curl -L -O https://aur.archlinux.org/cgit/aur.git/snapshot/code-server.tar.gz \
-    && tar -xvf code-server.tar.gz \
-    && cd code-server \
-    && makepkg -s
-
-USER root 
-WORKDIR "${NB_HOME}/aur/code-server"
-RUN pacman -U "$(find "${NB_HOME}/aur/code-server" -type f -name "code-server-*.zst" | sort | head -n 1)" --noconfirm 
-
-USER ${NB_UID}
-WORKDIR "${NB_HOME}/aur"
-RUN curl -fOL https://github.com/vadimcn/codelldb/releases/download/v1.11.5/codelldb-linux-x64.vsix
-RUN curl -fOL https://github.com/microsoft/vscode-cmake-tools/releases/download/v1.21.36/cmake-tools.vsix
-RUN curl -fOL https://github.com/clangd/vscode-clangd/releases/download/0.2.0/vscode-clangd-0.2.0.vsix
-RUn curl -fOL https://open-vsx.org/api/ms-python/python/2025.4.0/file/ms-python.python-2025.4.0.vsix
-RUn curl -fOL https://open-vsx.org/api/ms-toolsai/jupyter/2025.7.0/file/ms-toolsai.jupyter-2025.7.0.vsix
-RUN code-server \
-    --install-extension codelldb-linux-x64.vsix \
-    --install-extension cmake-tools.vsix \
-    --install-extension vscode-clangd-0.2.0.vsix \
-    --install-extension ms-python.python-2025.4.0.vsix \
-    --install-extension ms-toolsai.jupyter-2025.7.0.vsix
-
-WORKDIR "${NB_HOME}"
-RUN rm -rf "${NB_HOME}/aur"
-
-ENV VENV_DIR="${NB_HOME}/.venv"
+ENV VENV_DIR=/opt/venv
 RUN python -m venv "${VENV_DIR}"
+ENV PYTHONPATH="${VENV_DIR}/bin"
 ENV PATH="${VENV_DIR}/bin:${PATH}"
-
-RUN pip install \
+RUN python -m pip install \
     jupyterlab \
     jupyter-server-fileid \
-    jupyter-server-mathjax \    
+    jupyter-server-mathjax \
     jupyterlab-git \
     jupyter-server-terminals \
     jupyter-server-proxy \
     jupyter-vscode-proxy \
     jupyter-server-ydoc \
-    jupyterhub \
-    && pip list
+    jupyterhub
 
-RUN jupyter --paths
-# RUN jupyter lab --generate-config
-# COPY --chown="${NB_UID}":"${NB_GID}" .jupyter .jupyter
+RUN curl -L -O https://aur.archlinux.org/cgit/aur.git/snapshot/code-server.tar.gz \
+    && tar -xvf code-server.tar.gz \
+    && cd code-server \
+    && chown -R nobody:nobody ./ \
+    && runuser -u nobody makepkg -- -s \
+    && pacman -U "$(find ./ -type f -name "code-server-*.zst" | sort | head -n 1)" --noconfirm 
+RUN rm -rf "/code-server"
+
+RUN curl -fOL https://github.com/vadimcn/codelldb/releases/download/v1.11.5/codelldb-linux-x64.vsix
+RUN curl -fOL https://github.com/microsoft/vscode-cmake-tools/releases/download/v1.21.36/cmake-tools.vsix
+RUN curl -fOL https://github.com/clangd/vscode-clangd/releases/download/0.2.0/vscode-clangd-0.2.0.vsix
+RUn curl -fOL https://open-vsx.org/api/ms-python/python/2025.4.0/file/ms-python.python-2025.4.0.vsix
+RUn curl -fOL https://open-vsx.org/api/ms-toolsai/jupyter/2025.7.0/file/ms-toolsai.jupyter-2025.7.0.vsix
+RUN code-server --extensions-dir "/usr/lib/code-server/lib/vscode/extensions/" \
+    --install-extension codelldb-linux-x64.vsix \
+    --install-extension cmake-tools.vsix \
+    --install-extension vscode-clangd-0.2.0.vsix \
+    --install-extension ms-python.python-2025.4.0.vsix \
+    --install-extension ms-toolsai.jupyter-2025.7.0.vsix
+RUN rm -rf *.vsix
+
+ENV NB_USER="jovyan"
+ENV NB_UID="1000"
+ENV NB_GID="100"
+ENV NB_HOME="/home/${NB_USER}"
+RUN groupmod -g "${NB_GID}" users
+RUN useradd --no-log-init --create-home -d "${NB_HOME}" --shell /bin/bash --uid "${NB_UID}" --no-user-group  "${NB_USER}" 
+USER ${NB_UID}
+WORKDIR "${NB_HOME}"
 
 RUN clang-format --version
 RUN clang --version
@@ -90,14 +78,11 @@ RUN lldb --version
 RUN gcc --version
 RUN gdb --version
 RUN code-server --version
-RUN code-server --list-extensions
+RUN code-server --extensions-dir "/usr/lib/code-server/lib/vscode/extensions/" \
+    --list-extensions
 RUN jupyter kernelspec list
+RUN which python
+RUN python -m pip list
+RUN printenv
 
-# CMD ["/usr/bin/bash"]
-
-# local use
-# ENTRYPOINT ["jupyter", "lab"]
-# CMD ["--ip=0.0.0.0", "--no-browser"]
-
-# jupyterhub use
-ENTRYPOINT ["jupyterhub-singleuser", "--ip=0.0.0.0", "--no-browser"]
+ENTRYPOINT ["start.sh"]
