@@ -1,17 +1,16 @@
 FROM archlinux/archlinux:base-devel AS root
 
-
 USER root
 WORKDIR "/"
-
-COPY usr/local/bin/* usr/local/bin
-RUN mkdir /usr/local/bin/start-notebook.d
-RUN mkdir /usr/local/bin/before-notebook.d
 
 RUN pacman -Sy \
     git \
     wget \
     ttf-liberation \
+    texlive-latex \
+    texlive-latexrecommended \
+    texlive-fontsrecommended \
+    texlive-mathscience \
     pandoc \
     nodejs \
     clang \
@@ -19,26 +18,22 @@ RUN pacman -Sy \
     gcc \
     gdb \
     vim \
+    less \
+    dos2unix \
+    7zip \
     htop \
+    inetutils \
     cmake \
-    python-pip \   
+    tree \
+    doxygen \
     procps-ng \
-    --noconfirm 
-
-ENV VENV_DIR=/opt/venv
-RUN python -m venv "${VENV_DIR}"
-ENV PYTHONPATH="${VENV_DIR}/bin"
-ENV PATH="${VENV_DIR}/bin:${PATH}"
-RUN python -m pip install \
-    jupyterlab \
-    jupyter-server-fileid \
-    jupyter-server-mathjax \
-    jupyterlab-git \
-    jupyter-server-terminals \
-    jupyter-server-proxy \
-    jupyter-vscode-proxy \
-    jupyter-server-ydoc \
-    jupyterhub
+    cython \
+    openblas \
+    blas-openblas \
+    eigen \
+    openmpi \
+    python-pip \
+    --noconfirm
 
 RUN curl -L -O https://aur.archlinux.org/cgit/aur.git/snapshot/code-server.tar.gz \
     && tar -xvf code-server.tar.gz \
@@ -61,28 +56,44 @@ RUN code-server --extensions-dir "/usr/lib/code-server/lib/vscode/extensions/" \
     --install-extension ms-toolsai.jupyter-2025.7.0.vsix
 RUN rm -rf *.vsix
 
-ENV NB_USER="jovyan"
-ENV NB_UID="1000"
-ENV NB_GID="100"
-ENV NB_HOME="/home/${NB_USER}"
-RUN groupmod -g "${NB_GID}" users
-RUN useradd --no-log-init --create-home -d "${NB_HOME}" --shell /bin/bash --uid "${NB_UID}" --no-user-group  "${NB_USER}" 
-USER ${NB_UID}
-WORKDIR "${NB_HOME}"
+RUN python -m venv /opt/venv \
+    && source /opt/venv/bin/activate \
+    && python -m pip install \
+    altair \
+    beautifulsoup4 \
+    bottleneck \
+    cloudpickle \
+    dask \
+    dill \
+    h5py \
+    numexpr \
+    numba \
+    pandas \
+    patsy \
+    protobuf \
+    tables \
+    scikit-image \
+    scikit-learn \
+    scipy \
+    seaborn \
+    sqlalchemy \
+    sympy \
+    ipywidgets \
+    ipympl \
+    breathe \
+    sphinx \
+    Jinja2 \
+    jupyter-server-fileid \
+    jupyter-server-mathjax \
+    jupyter-server-terminals \
+    jupyter-server-proxy \
+    jupyter-vscode-proxy \
+    jupyter-server-ydoc \
+    jupyterlab \
+    jupyterlab-git \
+    jupyterlab-widgets \
+    jupyterhub
 
-RUN clang-format --version
-RUN clang --version
-RUN clang-repl --version
-RUN clangd --version
-RUN lldb --version
-RUN gcc --version
-RUN gdb --version
-RUN code-server --version
-RUN code-server --extensions-dir "/usr/lib/code-server/lib/vscode/extensions/" \
-    --list-extensions
-RUN jupyter kernelspec list
-RUN which python
-RUN python -m pip list
-RUN printenv
-
-ENTRYPOINT ["start.sh"]
+COPY etc/skel/.local/share/code-server/User/settings.json /etc/skel/.local/share/code-server/User/settings.json
+COPY entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
