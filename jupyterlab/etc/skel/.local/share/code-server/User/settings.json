@@ -1,3 +1,7 @@
 {
-  "python.defaultInterpreterPath": "/opt/venv/bin/python"
+  "python.defaultInterpreterPath": "/opt/venv/bin/python",
+  "python.terminal.activateEnvironment": false,
+  "terminal.integrated.env.linux": {
+    "VIRTUAL_ENV_DISABLE_PROMPT": "1"
+  }
 }

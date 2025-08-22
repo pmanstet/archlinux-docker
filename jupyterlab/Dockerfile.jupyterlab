@@ -3,97 +3,56 @@ FROM archlinux/archlinux:base-devel AS root
 USER root
 WORKDIR "/"
 
-RUN pacman -Sy \
-    git \
-    wget \
-    ttf-liberation \
-    texlive-latex \
-    texlive-latexrecommended \
-    texlive-fontsrecommended \
-    texlive-mathscience \
-    pandoc \
-    nodejs \
-    clang \
-    lldb \
-    gcc \
-    gdb \
-    vim \
-    less \
-    dos2unix \
-    7zip \
-    htop \
-    inetutils \
-    cmake \
-    tree \
-    doxygen \
-    procps-ng \
-    cython \
-    openblas \
-    blas-openblas \
-    eigen \
-    openmpi \
-    python-pip \
-    --noconfirm
+ARG ISO_DATE
+ARG SLASH_DATE
 
-RUN curl -L -O https://aur.archlinux.org/cgit/aur.git/snapshot/code-server.tar.gz \
-    && tar -xvf code-server.tar.gz \
+COPY packages.in /packages.in
+RUN echo "Server=https://archive.archlinux.org/repos/${SLASH_DATE}/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist \
+    && pacman -Sy --noconfirm --needed pacman \
+    && pacman -Syu --noconfirm \
+    && pacman -S --noconfirm - < /packages.in \
+    && pacman -Qqe > /pkglist.txt \
+    && pacman -Q > /fullpkglist.txt \
+    && pacman -Scc --noconfirm \
+    && rm -rf /tmp/* /usr/share/man/* /usr/share/doc/* /usr/share/info/*
+
+RUN git clone https://aur.archlinux.org/code-server.git /code-server \
+    && chown -R nobody:nobody /code-server \
+    && git config --global --add safe.directory /code-server \
     && cd code-server \
-    && chown -R nobody:nobody ./ \
-    && runuser -u nobody makepkg -- -s \
-    && pacman -U "$(find ./ -type f -name "code-server-*.zst" | sort | head -n 1)" --noconfirm 
-RUN rm -rf "/code-server"
+    && git checkout $(git rev-list -1 --before="${ISO_DATE}" HEAD) \
+    && runuser -u nobody makepkg -- --syncdeps \
+    && pacman -U "$(find ./ -type f -name "code-server-*.zst" | sort | head -n 1)" --noconfirm \
+    && runuser -u nobody makepkg -- --clean \
+    && pacman -Scc --noconfirm \
+    && cd / && rm -rf "/code-server" \
+    && rm -rf /tmp/*
 
-RUN curl -fOL https://github.com/vadimcn/codelldb/releases/download/v1.11.5/codelldb-linux-x64.vsix
-RUN curl -fOL https://github.com/microsoft/vscode-cmake-tools/releases/download/v1.21.36/cmake-tools.vsix
-RUN curl -fOL https://github.com/clangd/vscode-clangd/releases/download/0.2.0/vscode-clangd-0.2.0.vsix
-RUn curl -fOL https://open-vsx.org/api/ms-python/python/2025.4.0/file/ms-python.python-2025.4.0.vsix
-RUn curl -fOL https://open-vsx.org/api/ms-toolsai/jupyter/2025.7.0/file/ms-toolsai.jupyter-2025.7.0.vsix
-RUN code-server --extensions-dir "/usr/lib/code-server/lib/vscode/extensions/" \
-    --install-extension codelldb-linux-x64.vsix \
-    --install-extension cmake-tools.vsix \
-    --install-extension vscode-clangd-0.2.0.vsix \
-    --install-extension ms-python.python-2025.4.0.vsix \
-    --install-extension ms-toolsai.jupyter-2025.7.0.vsix
-RUN rm -rf *.vsix
-
+COPY ${ISO_DATE}-requirements.txt /${ISO_DATE}-requirements.txt
 RUN python -m venv /opt/venv \
     && source /opt/venv/bin/activate \
-    && python -m pip install \
-    altair \
-    beautifulsoup4 \
-    bottleneck \
-    cloudpickle \
-    dask \
-    dill \
-    h5py \
-    numexpr \
-    numba \
-    pandas \
-    patsy \
-    protobuf \
-    tables \
-    scikit-image \
-    scikit-learn \
-    scipy \
-    seaborn \
-    sqlalchemy \
-    sympy \
-    ipywidgets \
-    ipympl \
-    breathe \
-    sphinx \
-    Jinja2 \
-    jupyter-server-fileid \
-    jupyter-server-mathjax \
-    jupyter-server-terminals \
-    jupyter-server-proxy \
-    jupyter-vscode-proxy \
-    jupyter-server-ydoc \
-    jupyterlab \
-    jupyterlab-git \
-    jupyterlab-widgets \
-    jupyterhub
+    && python -m pip install --no-cache-dir -r /${ISO_DATE}-requirements.txt \
+    && rm -rf /tmp/*
 
+# code-server config adaptions 
+# note on codelldb: x64-build not available on open-vsx.org, using github instead
+RUN curl -fOL https://github.com/vadimcn/codelldb/releases/download/v1.11.5/codelldb-linux-x64.vsix \
+    && curl -fOL https://open-vsx.org/api/ms-vscode/cmake-tools/1.21.36/file/ms-vscode.cmake-tools-1.21.36.vsix \
+    && curl -fOL https://open-vsx.org/api/llvm-vs-code-extensions/vscode-clangd/0.2.0/file/llvm-vs-code-extensions.vscode-clangd-0.2.0.vsix \
+    && curl -fOL https://open-vsx.org/api/ms-python/python/2025.4.0/file/ms-python.python-2025.4.0.vsix \
+    && curl -fOL https://open-vsx.org/api/ms-toolsai/jupyter/2025.7.0/file/ms-toolsai.jupyter-2025.7.0.vsix \
+    && code-server --extensions-dir "/usr/lib/code-server/lib/vscode/extensions/" \
+    --install-extension codelldb-linux-x64.vsix \
+    --install-extension ms-vscode.cmake-tools-1.21.36.vsix \
+    --install-extension llvm-vs-code-extensions.vscode-clangd-0.2.0.vsix \
+    --install-extension ms-python.python-2025.4.0.vsix \
+    --install-extension ms-toolsai.jupyter-2025.7.0.vsix \
+    && rm -rf *.vsix
+
+# global and /etc/skel config/tailoring
 COPY etc/skel/.local/share/code-server/User/settings.json /etc/skel/.local/share/code-server/User/settings.json
+ENV CS_DISABLE_GETTING_STARTED_OVERRIDE=true
+ENV VIRTUAL_ENV_DISABLE_PROMPT=true
+
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
