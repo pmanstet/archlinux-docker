@@ -1,4 +1,6 @@
 {
+  "workbench.startupEditor": "none",
+  "security.workspace.trust.enabled": false,
   "python.defaultInterpreterPath": "/opt/venv/bin/python",
   "python.terminal.activateEnvironment": false,
   "terminal.integrated.env.linux": {

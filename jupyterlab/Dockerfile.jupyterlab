@@ -1,58 +1,54 @@
-FROM archlinux/archlinux:base-devel AS root
+FROM archlinux/archlinux:base AS system
 
-USER root
-WORKDIR "/"
+ARG ARG_DATE_ISO
+ENV DATE_ISO=$ARG_DATE_ISO
+COPY "./${DATE_ISO}" "/${DATE_ISO}"
 
-ARG ISO_DATE
-ARG SLASH_DATE
-
-COPY packages.in /packages.in
-RUN echo "Server=https://archive.archlinux.org/repos/${SLASH_DATE}/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist \
+RUN echo "Server=https://archive.archlinux.org/repos/$(date -d "${DATE_ISO} -1 days" +'%Y/%m/%d')/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist \
     && pacman -Sy --noconfirm --needed pacman \
     && pacman -Syu --noconfirm \
-    && pacman -S --noconfirm - < /packages.in \
-    && pacman -Qqe > /pkglist.txt \
-    && pacman -Q > /fullpkglist.txt \
+    && pacman -S --noconfirm - < "/${DATE_ISO}/packages.in" \
+    && pacman -Qe > "/${DATE_ISO}/packages.out" \
+    && pacman -Q   > "/${DATE_ISO}/packages-all.out" \
     && pacman -Scc --noconfirm \
-    && rm -rf /tmp/* /usr/share/man/* /usr/share/doc/* /usr/share/info/*
+    && rm -rf /tmp/* /var/tmp/* /usr/share/man/* /usr/share/doc/* /usr/share/info/*
+CMD ["bash", "-c", "exec bash"]
 
-RUN git clone https://aur.archlinux.org/code-server.git /code-server \
-    && chown -R nobody:nobody /code-server \
-    && git config --global --add safe.directory /code-server \
-    && cd code-server \
-    && git checkout $(git rev-list -1 --before="${ISO_DATE}" HEAD) \
-    && runuser -u nobody makepkg -- --syncdeps \
-    && pacman -U "$(find ./ -type f -name "code-server-*.zst" | sort | head -n 1)" --noconfirm \
-    && runuser -u nobody makepkg -- --clean \
-    && pacman -Scc --noconfirm \
-    && cd / && rm -rf "/code-server" \
-    && rm -rf /tmp/*
+FROM system AS venv
 
-COPY ${ISO_DATE}-requirements.txt /${ISO_DATE}-requirements.txt
 RUN python -m venv /opt/venv \
     && source /opt/venv/bin/activate \
-    && python -m pip install --no-cache-dir -r /${ISO_DATE}-requirements.txt \
+    && python -m pip install --no-cache-dir pip-tools \
+    && pip-compile --output-file "/${DATE_ISO}/requirements.out" "/${DATE_ISO}/requirements.in" \
+    && python -m pip install --no-cache-dir -r "/${DATE_ISO}/requirements.out" \
     && rm -rf /tmp/*
+ENV VIRTUAL_ENV_DISABLE_PROMPT=true
+CMD ["bash", "-c", "source /opt/venv/bin/activate && exec bash"]
 
-# code-server config adaptions 
-# note on codelldb: x64-build not available on open-vsx.org, using github instead
-RUN curl -fOL https://github.com/vadimcn/codelldb/releases/download/v1.11.5/codelldb-linux-x64.vsix \
-    && curl -fOL https://open-vsx.org/api/ms-vscode/cmake-tools/1.21.36/file/ms-vscode.cmake-tools-1.21.36.vsix \
-    && curl -fOL https://open-vsx.org/api/llvm-vs-code-extensions/vscode-clangd/0.2.0/file/llvm-vs-code-extensions.vscode-clangd-0.2.0.vsix \
-    && curl -fOL https://open-vsx.org/api/ms-python/python/2025.4.0/file/ms-python.python-2025.4.0.vsix \
-    && curl -fOL https://open-vsx.org/api/ms-toolsai/jupyter/2025.7.0/file/ms-toolsai.jupyter-2025.7.0.vsix \
-    && code-server --extensions-dir "/usr/lib/code-server/lib/vscode/extensions/" \
-    --install-extension codelldb-linux-x64.vsix \
-    --install-extension ms-vscode.cmake-tools-1.21.36.vsix \
-    --install-extension llvm-vs-code-extensions.vscode-clangd-0.2.0.vsix \
-    --install-extension ms-python.python-2025.4.0.vsix \
-    --install-extension ms-toolsai.jupyter-2025.7.0.vsix \
-    && rm -rf *.vsix
+FROM venv AS code-server
 
-# global and /etc/skel config/tailoring
+RUN git clone https://aur.archlinux.org/code-server.git /code-server \
+    && git config --global --add safe.directory /code-server \
+    && cd /code-server \
+    && git checkout $(git rev-list -1 --before="${DATE_ISO}" HEAD) \
+    && chown -R nobody:nobody /code-server \
+    && runuser -u nobody makepkg -- --nocheck --nodeps \
+    && pacman -U code-server-*.pkg.tar.zst --noconfirm \
+    && pacman -Scc --noconfirm \
+    && cd / && rm -rf "/code-server" \
+    && rm -rf /tmp/* /var/tmp/*
+
+# note on codelldb: x64-build not available on open-vsx.org, using github instead (see extensions.txt)
+RUN wget --no-verbose --input-file "/${DATE_ISO}/extensions.in" \
+    && for extension in /*.vsix; do code-server --extensions-dir "/usr/lib/code-server/lib/vscode/extensions/" --install-extension $extension; done \
+    && rm -rf /*.vsix \
+    && code-server --list-extensions --extensions-dir "/usr/lib/code-server/lib/vscode/extensions/" > "/${DATE_ISO}/extensions-all.out" 
+
 COPY etc/skel/.local/share/code-server/User/settings.json /etc/skel/.local/share/code-server/User/settings.json
 ENV CS_DISABLE_GETTING_STARTED_OVERRIDE=true
-ENV VIRTUAL_ENV_DISABLE_PROMPT=true
+ENTRYPOINT ["bash", "-c", "source /opt/venv/bin/activate && code-server --bind-addr 0.0.0.0:8080 --auth none /"]
+
+FROM code-server AS jupyter
 
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

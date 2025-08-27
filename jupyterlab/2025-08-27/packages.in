@@ -6,7 +6,6 @@ lldb
 lld
 libc++
 libc++abi
-curl
 ninja
 perf
 strace
@@ -38,3 +37,8 @@ tree
 ttf-liberation
 vim
 wget
+curl
+openssh
+openssl
+ca-certificates
+certbot

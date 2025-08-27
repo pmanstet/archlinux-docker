@@ -5,36 +5,38 @@
 ```shell
 # sudo pacman -Sy make devtools git podman fakechroot fakeroot
 make clean
-make image-base-devel
+make image-base
 podman image ls
-podman run -it --rm localhost/archlinux/archlinux:base-devel
+podman run -it --rm localhost/archlinux/archlinux:base
 ```
 
 # build/test archlinux:jupyterlab
 
 ```shell
-# re-generate (update) pinned versions of pipy packages (using the host system)
-python -m venv .venv
-source .venv/bin/activate
-pip install pip-tools
-export ISO_DATE=$(date -d "-1 days" +'%Y-%m-%d') # note: -1 days due to availability of ALA snapshots
-pip-compile --output-file jupyterlab/${ISO_DATE}-requirements.txt jupyterlab/requirements.in
-deactivate && rm -rf .venv
-# alternative: use an existing set of pinned versions
-# export ISO_DATE="2025-08-19"
-# test -f jupyterlab/${ISO_DATE}-requirements.txt || echo "no corresponding fixed set of python packages present"
-```
-
-```shell
 # build image
+export DATE_ISO=2025-08-27
+
+# optional: build code-server stage
+podman build --target code-server \
+    --build-arg ARG_DATE_ISO="${DATE_ISO}" \
+    -f jupyterlab/Dockerfile.jupyterlab \
+    -t localhost/archlinux/archlinux:code-server \
+    jupyterlab
+podman run --rm -it -p 8080:8080 localhost/archlinux/archlinux:code-server
+# open ->  http://0.0.0.0:8080 to test
 podman build \
-    --build-arg ISO_DATE=${ISO_DATE} \
-    --build-arg SLASH_DATE=$(date -d "$ISO_DATE" +"%Y/%m/%d") \
+    --build-arg ARG_DATE_ISO="${DATE_ISO}" \
     -f jupyterlab/Dockerfile.jupyterlab \
     -t localhost/archlinux/archlinux:jupyterlab \
     jupyterlab
-podman image ls
+
+# extract package info form container filesystem
+podman create --name temp localhost/archlinux/archlinux:jupyterlab
+podman cp temp:"/${DATE_ISO}/." "./jupyterlab/${DATE_ISO}/"
+podman rm temp
+# clean up local images
 podman image prune --force
+for i in `podman ps --all --storage | sed '1d' | awk '{print$1}'`; do podman rm $i --force ; done
 # inspect image size contributed by each layer
 podman history --no-trunc localhost/archlinux/archlinux:jupyterlab
 
