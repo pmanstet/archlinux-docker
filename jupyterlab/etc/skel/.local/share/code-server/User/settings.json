@@ -1,9 +1,26 @@
 {
+  "extensions.autoCheckUpdates": false,
+  "extensions.ignoreRecommendations": true,
   "workbench.startupEditor": "none",
   "security.workspace.trust.enabled": false,
   "python.defaultInterpreterPath": "/opt/venv/bin/python",
   "python.terminal.activateEnvironment": false,
+  "git.terminalAuthentication": false,
   "terminal.integrated.env.linux": {
     "VIRTUAL_ENV_DISABLE_PROMPT": "1"
-  }
+  },
+  "editor.formatOnSave": true,
+  "[cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  },
+  "[c]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+  },
+  "cmake.configureOnOpen": false,
+  "cmake.ctestArgs": [
+    "--verbose"
+  ],
+  "lldb.verboseLogging": true,
+  "lldb.showDisassembly": "never",
+  "lldb.consoleMode": "evaluate"
 }

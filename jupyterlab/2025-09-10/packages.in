@@ -13,11 +13,15 @@ valgrind
 llvm
 polly
 gcc
+gcc-fortran
 gdb
 cmake
+robin-map
+nanobind
 cython
 dos2unix
 doxygen
+graphviz
 eigen
 git
 htop
@@ -26,6 +30,7 @@ less
 nodejs
 openblas
 openmpi
+openmp
 7zip
 pandoc-cli
 python-pip

@@ -14,7 +14,7 @@ podman run -it --rm localhost/archlinux/archlinux:base
 
 ```shell
 # build image
-export DATE_ISO=2025-08-27
+export DATE_ISO=2025-09-10
 
 # optional: build code-server stage
 podman build --target code-server \
@@ -24,6 +24,8 @@ podman build --target code-server \
     jupyterlab
 podman run --rm -it -p 8080:8080 localhost/archlinux/archlinux:code-server
 # open ->  http://0.0.0.0:8080 to test
+
+# build full image
 podman build \
     --build-arg ARG_DATE_ISO="${DATE_ISO}" \
     -f jupyterlab/Dockerfile.jupyterlab \
@@ -45,10 +47,10 @@ podman volume rm demohome || true
 podman volume create demohome --opt o=uid=$(id -u),gid=$(id -g)
 DEMOHOME=$(podman volume inspect demohome --format={{.Mountpoint}})
 podman unshare cp -r /etc/skel/. "${DEMOHOME}/"
-sudo chown --reference "${DEMOHOME}" -R "${DEMOHOME}"
+podman unshare chown -R $(id -u):$(id -g) "${DEMOHOME}"
 podman unshare ls -la "${DEMOHOME}"
 
-# start local jupyter lab (overrule default entrypoint)
+# start local jupyter lab
 podman run --rm -it \
     -p 8888:8888 \
     -e NB_UID=$(id -u) \
@@ -60,7 +62,7 @@ podman run --rm -it \
 
 # -> open link prodived in console in the browser to test e.g.
 # http://127.0.0.1:8888/lab?token=XXXXXXXXXXXXX
-# to wipe persistent(maybe old) settings: cp -rf /etc/skel/. ~/
+# to wipe persistent home with default settings: cp -rf /etc/skel/. ~/
 
 # start "fake" jupyter hub -> expected to fail as no hub is running
 podman run --rm -it -e JUPYTERHUB_SERVICE_URL="fake" \
